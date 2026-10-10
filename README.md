@@ -1,4 +1,4 @@
-CHALLENGE MAKER EXPORTER 0.8.144
+CHALLENGE MAKER EXPORTER 0.8.145
 
 0.8.143 fixes {damage multiplier} in exported challenges by calculating the
 actual vanilla player multiplier instead of calling a laser-only API.
