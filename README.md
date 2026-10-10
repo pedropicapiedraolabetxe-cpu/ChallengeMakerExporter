@@ -1,4 +1,4 @@
-CHALLENGE MAKER EXPORTER 0.8.138
+CHALLENGE MAKER EXPORTER 0.8.139
 
 This package includes the rebuilt Windows executable (0. 1. 0).
 It reads empty Lua map fields stored as [], {}, or null without rejecting
@@ -44,10 +44,13 @@ Build from tools/source:
   VARIABLE IS and CHANGE VARIABLE TO.
 - Added the current clot creation, destruction and retrieval conditions/effects.
 
+0.8.139 - SINGLE-BRACE VARIABLE REFERENCES
+- Variable references use {variable}; typing { opens matching suggestions.
+
 0.8.138 - MATH AND VARIABLE MESSAGES
-- Added MATH conditions and effects using numeric expressions and {{variable}}
+- Added MATH conditions and effects using numeric expressions and {variable}
   references.
-- SHOW MESSAGE now replaces {{variable}} references with their current values.
+- SHOW MESSAGE now replaces {variable} references with their current values.
 
 0.8.80 - DESCRIPTION
 DESCRIPTION is the first parameter. SAVE replaces the existing description;
