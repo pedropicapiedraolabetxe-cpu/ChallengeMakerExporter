@@ -1,7 +1,10 @@
-CHALLENGE MAKER EXPORTER 0.8.143
+CHALLENGE MAKER EXPORTER 0.8.144
 
 0.8.143 fixes {damage multiplier} in exported challenges by calculating the
 actual vanilla player multiplier instead of calling a laser-only API.
+
+0.8.144 adds dynamic {variable} and {vanilla stat} expressions to stat changes,
+health, pickups, thresholds, waits, cooldowns, chance, delay, text and commands.
 
 This package includes the rebuilt Windows executable (0. 1. 0).
 It reads empty Lua map fields stored as [], {}, or null without rejecting
