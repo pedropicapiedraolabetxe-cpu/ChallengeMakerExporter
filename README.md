@@ -1,4 +1,4 @@
-CHALLENGE MAKER EXPORTER 0.8.140
+CHALLENGE MAKER EXPORTER 0.8.141
 
 This package includes the rebuilt Windows executable (0. 1. 0).
 It reads empty Lua map fields stored as [], {}, or null without rejecting
@@ -50,6 +50,9 @@ Build from tools/source:
 0.8.140 - VANILLA STAT REFERENCES
 - MATH and SHOW MESSAGE support {damage}, {damage multiplier}, {range},
   {tears}, {fire rate}, {fire delay}, {speed}, {shot speed} and {luck}.
+
+0.8.141 - MATH MULTIPLICATION
+- MATH accepts both x and * as multiplication operators.
 
 0.8.138 - MATH AND VARIABLE MESSAGES
 - Added MATH conditions and effects using numeric expressions and {variable}
