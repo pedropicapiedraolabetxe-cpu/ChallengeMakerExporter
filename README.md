@@ -1,4 +1,4 @@
-CHALLENGE MAKER EXPORTER 0.8.105
+CHALLENGE MAKER EXPORTER 0.8.137
 
 This package includes the rebuilt Windows executable (0. 1. 0).
 It reads empty Lua map fields stored as [], {}, or null without rejecting
@@ -35,6 +35,14 @@ Build from tools/source:
   set GOOS=windows
   set GOARCH=amd64
   go build -ldflags="-H windowsgui" -o ../ChallengeMakerExporter.exe main.go
+
+0.8.137 - MULTIPLE THENS, VARIABLES AND CLOTTIES
+- Updated the embedded runtime to match the current Challenge Maker version.
+- Exported IF / ELSE IF branches preserve all THEN effects and the independent
+  repeat, chance, cooldown and delay options of every THEN.
+- Exported challenges now include text, number and boolean variables used by
+  VARIABLE IS and CHANGE VARIABLE TO.
+- Added the current clot creation, destruction and retrieval conditions/effects.
 
 0.8.80 - DESCRIPTION
 DESCRIPTION is the first parameter. SAVE replaces the existing description;
