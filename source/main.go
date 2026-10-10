@@ -608,6 +608,49 @@ func exportSelectedToFolder(folder string) {
 	messageBox(appTitle, fmt.Sprintf("Exported %d challenge(s) to:\n%s\n\n%d challenges in this independent pack. Enable the pack in Mods and restart Isaac.", len(selected), namedDir, total), MB_OK|MB_ICONINFO)
 }
 
+func exportRequest(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var request struct {
+		Folder string   `json:"folder"`
+		IDs    []string `json:"ids"`
+	}
+	if err := json.Unmarshal(raw, &request); err != nil {
+		return err
+	}
+	if !validExportFolder(request.Folder) {
+		return fmt.Errorf("invalid folder name")
+	}
+	wanted := map[string]bool{}
+	for _, id := range request.IDs {
+		wanted[id] = true
+	}
+	selected := make([]Challenge, 0, len(wanted))
+	for _, challenge := range challenges {
+		if wanted[challenge.ID] {
+			selected = append(selected, challenge)
+		}
+	}
+	if len(selected) == 0 {
+		return fmt.Errorf("no matching challenges selected")
+	}
+	files, _, err := prepareFolderExport(filepath.Join(isaacDir, "mods"), request.Folder, selected, challenges)
+	if err != nil {
+		return err
+	}
+	for file, contents := range files {
+		if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(file, []byte(contents), 0644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func xmlEscape(s string) string {
 	replacer := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\"", "&quot;", "'", "&apos;")
 	return replacer.Replace(s)
@@ -1502,6 +1545,15 @@ func main() {
 	isaacDir = findIsaacDir()
 	if isaacDir != "" {
 		challenges = readChallenges(isaacDir)
+	}
+	if len(os.Args) == 3 && os.Args[1] == "--request" {
+		err := exportRequest(os.Args[2])
+		result := "OK"
+		if err != nil {
+			result = "ERROR: " + err.Error()
+		}
+		_ = os.WriteFile(os.Args[2]+".result", []byte(result), 0644)
+		return
 	}
 
 	hInst, _, _ := procGetModuleHandleW.Call(0)
