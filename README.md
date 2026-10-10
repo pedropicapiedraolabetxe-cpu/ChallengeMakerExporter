@@ -47,6 +47,12 @@ full-screen panel. Click its red X to close. While open the game update is
 paused and gameplay input is blocked. Long text wraps and scrolls; the right
 scrollbar also accepts clicking/dragging. No description means no popup.
 
+HOW TO SET UP:
+1. Enter the isaac folder.
+2. Go to mods and search challenge_maker.
+3. Put all files from this into tools.
+4. Now you can use it freely
+
 HOW TO USE:
 1. Execute the .exe.
 2. Select the challenges you want to export.
