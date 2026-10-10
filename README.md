@@ -46,3 +46,14 @@ Entering a described challenge (including Continue or Retry) opens a nearly
 full-screen panel. Click its red X to close. While open the game update is
 paused and gameplay input is blocked. Long text wraps and scrolls; the right
 scrollbar also accepts clicking/dragging. No description means no popup.
+
+HOW TO USE:
+1. Execute the .exe.
+2. Select the challenges you want to export.
+3. Click the button in the top right that says "EXPORT".
+4. Introduce a name for the folder of the mod pack with all the selected challenges.
+5. Click "EXPORT" again.
+6. The folder will be created in the mods folder inside of isaac and it will appear in the custom challenges isaac native section.
+7. If you want to upload it to Steam just use the mod uploader inside isaac tools and select the folder.
+
+Thanks for using this mod
