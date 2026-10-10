@@ -20,8 +20,8 @@ M.TriggerOptions[#M.TriggerOptions+1] = "room_cleared_x"
 M.TriggerOptions[#M.TriggerOptions+1] = "floor_cleared_time"
 M.TriggerOptions[#M.TriggerOptions+1] = "no_damage_room"
 M.TriggerOptions[#M.TriggerOptions+1] = "no_damage_floor"
-for _,key in ipairs({"health_threshold","stat_threshold","has_property","active_fully_charged","pickup_spawned","deal_entered","secret_room_found","donation_made","machine_used","character_changed"}) do M.TriggerOptions[#M.TriggerOptions+1]=key end
-for _,key in ipairs({"teleport_to_room_event","spawn_enemy_event","remove_item_event","reroll_item_event","dupe_item_event"}) do M.TriggerOptions[#M.TriggerOptions+1]=key end
+for _,key in ipairs({"health_threshold","add_broken_heart","remove_broken_heart","broken_heart_num","stat_threshold","has_property","active_fully_charged","pickup_spawned","deal_entered","secret_room_found","donation_made","machine_used","character_changed"}) do M.TriggerOptions[#M.TriggerOptions+1]=key end
+for _,key in ipairs({"teleport_to_room_event","spawn_enemy_event","remove_item_event","reroll_item_event","dupe_item_event","console_command_event"}) do M.TriggerOptions[#M.TriggerOptions+1]=key end
 M.TriggerOptions[#M.TriggerOptions+1]="void_absorb"
 M.TriggerOptions[#M.TriggerOptions+1]="abbys_absorb"
 M.TriggerOptions[#M.TriggerOptions+1] = "grab_item"
@@ -57,15 +57,24 @@ function M.FormatAmount(value)
 end
 local function isItemAction(action) return action=="give_item" or action=="spawn_item" end
 local function isRewardAction(action) return isItemAction(action) or action=="give_trinket" end
-local specialActions={remove_item=true,reroll_item=true,dupe_item=true,spawn_trinket=true,give_pickup=true,spawn_pickup=true,heal=true,damage=true,add_heart_container=true,remove_heart_container=true,teleport_room=true,open_doors=true,close_doors=true,spawn_enemy=true,spawn_boss=true,apply_status=true,charge_item=true,
-    change_character=true,use_active_effect=true,play_sound=true,show_message=true,start_timer=true,stop_timer=true,end_challenge=true,win_challenge=true,lose_challenge=true,repeat_floor=true,go_to_stage=true}
+local specialActions={add_broken_heart=true,remove_broken_heart=true,remove_item=true,reroll_item=true,dupe_item=true,spawn_trinket=true,give_pickup=true,spawn_pickup=true,heal=true,damage=true,add_heart_container=true,remove_heart_container=true,teleport_room=true,open_doors=true,close_doors=true,spawn_enemy=true,spawn_boss=true,apply_status=true,charge_item=true,
+    change_character=true,use_active_effect=true,play_sound=true,show_message=true,console_command=true,start_timer=true,stop_timer=true,end_challenge=true,win_challenge=true,lose_challenge=true,repeat_floor=true,go_to_stage=true}
+local function normalizeCommand(value)
+    return tostring(value or ""):gsub("^%s+",""):gsub("%s+$",""):lower()
+end
 local function validSpecialAction(r)
     local c=r.effectConfig
+    if r.action=="spawn_machine" then local n=type(c)=="table" and tonumber(c.variant);return n and n>=1 and n<=18 and n~=14 and n==math.floor(n) or false end
+    if r.action=="add_broken_heart" or r.action=="remove_broken_heart" then local n=type(c)=="table" and tonumber(c.amount);return n and n>=1 and n<=11 and n==math.floor(n) or false end
     if r.action=="remove_item" then return M.Rewards.Valid(r.gift) and r.gift.kind=="fixed" end
     if r.action=="spawn_trinket" then return M.Rewards.ValidTrinket(r.gift) end
     if ({reroll_item=true,dupe_item=true,open_doors=true,close_doors=true,start_timer=true,stop_timer=true,end_challenge=true,win_challenge=true,lose_challenge=true,repeat_floor=true})[r.action] then return true end
     if r.action=="charge_item" then return type(c)=="table" and tonumber(c.amount) and tonumber(c.amount)>0 and tonumber(c.amount)==math.floor(tonumber(c.amount)) end
-    if r.action=="heal" or r.action=="damage" or r.action=="add_heart_container" or r.action=="remove_heart_container" then return type(c)=="table" and tonumber(c.amount) and tonumber(c.amount)>0 end
+    if r.action=="add_heart_container" then
+        return type(c)=="table" and (c.containerType=="red" or c.containerType=="bone") and type(c.filled)=="boolean"
+            and tonumber(c.amount) and tonumber(c.amount)>=1 and tonumber(c.amount)==math.floor(tonumber(c.amount))
+    end
+    if r.action=="heal" or r.action=="damage" or r.action=="remove_heart_container" then return type(c)=="table" and tonumber(c.amount) and tonumber(c.amount)>0 end
     if r.action=="give_pickup" or r.action=="spawn_pickup" then return type(c)=="table" and ({coin=true,bomb=true,key=true,heart=true,card=true,pill=true,battery=true})[c.kind]==true and tonumber(c.amount) and tonumber(c.amount)>0 end
     if r.action=="teleport_room" then return type(c)=="table" and tonumber(c.roomType)~=nil end
     if r.action=="spawn_enemy" or r.action=="spawn_boss" then return type(c)=="table" and tonumber(c.type)~=nil end
@@ -74,17 +83,23 @@ local function validSpecialAction(r)
     if r.action=="use_active_effect" then return M.Rewards.Valid(r.gift) and r.gift.kind=="fixed" end
     if r.action=="play_sound" then return type(c)=="table" and tonumber(c.id)~=nil end
     if r.action=="show_message" then return type(c)=="table" and tostring(c.text or "")~="" end
+    if r.action=="console_command" then return type(c)=="table" and normalizeCommand(c.command)~="" end
     if r.action=="go_to_stage" then return type(c)=="table" and tonumber(c.stage)~=nil end
     return false
 end
 local triggerValid = {}
+specialActions.spawn_machine=true
 for _, key in ipairs(M.TriggerOptions) do triggerValid[key] = true end
 -- Previously saved CLEARING ROOM rules stay playable, though the editor no longer offers new ones.
 triggerValid.clearing_room = true
 triggerValid.run_start=true
 function M.Name(key)
+    if key=="spawn_machine" then return "SPAWN MACHINE" end
+    if key=="add_broken_heart" then return "ADD BROKEN HEART" end
+    if key=="remove_broken_heart" then return "REMOVE BROKEN HEART" end
+    if key=="broken_heart_num" then return "BROKEN HEART NUM" end
     if key=="run_start" then return "RUN START" end
-    local actionNames={remove_item="REMOVE ITEM",reroll_item="REROLL ITEM",dupe_item="DUPE ITEM",spawn_trinket="SPAWN TRINKET",give_pickup="GIVE PICKUP",spawn_pickup="SPAWN PICKUP",heal="HEAL",damage="DAMAGE",add_heart_container="ADD HEART CONTAINER",remove_heart_container="REMOVE HEART CONTAINER",teleport_room="TELEPORT TO ROOM",open_doors="OPEN DOORS",close_doors="CLOSE DOORS",spawn_enemy="SPAWN ENEMY",spawn_boss="SPAWN BOSS",apply_status="APPLY STATUS",charge_item="CHARGE ITEM",change_character="CHANGE CHARACTER",use_active_effect="USE ACTIVE ITEM EFFECT",play_sound="PLAY SOUND",show_message="SHOW MESSAGE",start_timer="START TIMER",stop_timer="STOP TIMER",end_challenge="END CHALLENGE",win_challenge="WIN CHALLENGE",lose_challenge="LOSE CHALLENGE",repeat_floor="REPEAT FLOOR",go_to_stage="GO TO FLOOR / STAGE"}
+    local actionNames={remove_item="REMOVE ITEM",reroll_item="REROLL ITEM",dupe_item="DUPE ITEM",spawn_trinket="SPAWN TRINKET",give_pickup="GIVE PICKUP",spawn_pickup="SPAWN PICKUP",heal="HEAL",damage="DAMAGE",add_heart_container="ADD HEART CONTAINER",remove_heart_container="REMOVE HEART CONTAINER",teleport_room="TELEPORT TO ROOM",open_doors="OPEN DOORS",close_doors="CLOSE DOORS",spawn_enemy="SPAWN ENEMY",spawn_boss="SPAWN BOSS",apply_status="APPLY STATUS",charge_item="CHARGE ITEM",change_character="CHANGE CHARACTER",use_active_effect="USE ACTIVE ITEM EFFECT",play_sound="PLAY SOUND",show_message="SHOW MESSAGE",console_command="CONSOLE COMMAND",start_timer="START TIMER",stop_timer="STOP TIMER",end_challenge="END CHALLENGE",win_challenge="WIN CHALLENGE",lose_challenge="LOSE CHALLENGE",repeat_floor="REPEAT FLOOR",go_to_stage="GO TO FLOOR / STAGE"}
     if actionNames[key] then return actionNames[key] end
     if key == "finish" then return "FINISH THE CHALLENGE" end
     if key == "death_list_complete" then return "COMPLETE A DEATH'S LIST" end
@@ -99,7 +114,7 @@ function M.Name(key)
     if key == "floor_cleared_time" then return "FLOOR CLEARED IN X TIME" end
     if key == "no_damage_room" then return "NO DAMAGE ROOM" end
     if key == "no_damage_floor" then return "NO DAMAGE FLOOR" end
-    local extraNames={health_threshold="HEALTH BELOW / ABOVE",stat_threshold="STAT BELOW / ABOVE",has_property="HAS ITEM / TRINKET / TRANSFORMATION",active_fully_charged="ACTIVE ITEM FULLY CHARGED",pickup_spawned="PICKUP SPAWNED",deal_entered="DEAL ENTERED",secret_room_found="SECRET ROOM FOUND",donation_made="DONATION MADE",machine_used="MACHINE USED",character_changed="CHARACTER CHANGED",teleport_to_room_event="TELEPORT TO ROOM",spawn_enemy_event="SPAWN ENEMY",remove_item_event="REMOVE ITEM",reroll_item_event="REROLL ITEM",dupe_item_event="DUPE ITEM",void_absorb="VOID",abbys_absorb="ABBYS"}
+    local extraNames={health_threshold="HEALTH BELOW / ABOVE",stat_threshold="STAT BELOW / ABOVE",has_property="HAS ITEM / TRINKET / TRANSFORMATION",active_fully_charged="ACTIVE ITEM FULLY CHARGED",pickup_spawned="PICKUP SPAWNED",deal_entered="DEAL ENTERED",secret_room_found="SECRET ROOM FOUND",donation_made="DONATION MADE",machine_used="MACHINE USED",character_changed="CHARACTER CHANGED",teleport_to_room_event="TELEPORT TO ROOM",spawn_enemy_event="SPAWN ENEMY",remove_item_event="REMOVE ITEM",reroll_item_event="REROLL ITEM",dupe_item_event="DUPE ITEM",console_command_event="CONSOLE COMMAND",void_absorb="VOID",abbys_absorb="ABBYS"}
     if extraNames[key] then return extraNames[key] end
     if key == "grab_item" then return "GRAB ITEM" end
     if key == "room_clear" then return "ROOM CLEAR" end
@@ -234,18 +249,24 @@ local function validKeyBinding(binding)
 end
 local function validExtra(r)
     local x=r.extra
+    if r.trigger=="broken_heart_num" then local n=type(x)=="table" and tonumber(x.amount);return n and n>=0 and n<=12 and n==math.floor(n) or false end
     if r.trigger=="required_items" then
         if type(x)~="table" or type(x.items)~="table" or #x.items==0 then return false end
         for _,item in ipairs(x.items) do if type(item)~="table" or tostring(item.token or "")=="" then return false end end
         return true
     end
-    if r.trigger=="health_threshold" then return type(x)=="table" and (x.direction=="above" or x.direction=="below") and tonumber(x.amount)~=nil end
+    if r.trigger=="health_threshold" then
+        if type(x)~="table" or (x.direction~="above" and x.direction~="below") or tonumber(x.amount)==nil then return false end
+        -- Old saved rules did not have heartType; keep them valid as total health.
+        return x.heartType==nil or ({red=true,soul=true,black=true,eternal=true,bone=true})[x.heartType]==true
+    end
     if r.trigger=="stat_threshold" then return type(x)=="table" and ({speed=true,tears=true,damage=true,range=true,shot_speed=true,luck=true})[x.stat]==true and (x.direction=="above" or x.direction=="below") and tonumber(x.amount)~=nil end
     if r.trigger=="has_property" then return type(x)=="table" and ((x.kind=="item" or x.kind=="trinket") and tostring(x.token or "")~="" or x.kind=="transformation" and tostring(x.key or "")~="") end
     if r.trigger=="pickup_spawned" then return validPickupFilter(x) end
     if r.trigger=="deal_entered" then return type(x)=="table" and (x.kind=="any" or x.kind=="devil" or x.kind=="angel") end
     if r.trigger=="teleport_to_room_event" then return type(r.eventConfig)=="table" and tonumber(r.eventConfig.roomType)~=nil end
     if r.trigger=="spawn_enemy_event" then return type(r.eventConfig)=="table" and tonumber(r.eventConfig.type)~=nil end
+    if r.trigger=="console_command_event" then local c=r.eventConfig;return type(c)=="table" and (c.any==true or normalizeCommand(c.command)~="") end
     if r.trigger=="remove_item_event" or r.trigger=="dupe_item_event" then return true end
     if r.trigger=="void_absorb" or r.trigger=="abbys_absorb" then
         local f=r.voidFilter;if type(f)~="table" or not ({any=true,active=true,passive=true})[f.category] or type(f.all)~="boolean" or type(f.choices)~="table" then return false end
@@ -257,16 +278,22 @@ local function validExtra(r)
 end
 local function extraLabel(r)
     local x=r.extra or {}
+    if r.trigger=="broken_heart_num" then return M.FormatAmount(x.amount).." BROKEN HEARTS" end
     if r.trigger=="required_items" then
         local items=x.items or {}
         return #items==1 and tostring(items[1].name or items[1].token) or tostring(#items).." ITEMS"
     end
-    if r.trigger=="health_threshold" then return string.upper(x.direction or "?").." "..M.FormatAmount(x.amount or 0).." HEARTS" end
+    if r.trigger=="health_threshold" then
+        local names={red="RED",soul="SOUL",black="BLACK",eternal="ETERNAL",bone="BONE"}
+        local kind=names[x.heartType]
+        return string.upper(x.direction or "?").." "..M.FormatAmount(x.amount or 0).." "..(kind and (kind.." HEARTS") or "HEARTS")
+    end
     if r.trigger=="stat_threshold" then return string.upper(tostring(x.stat or "STAT"):gsub("_"," ")).." "..string.upper(x.direction or "?").." "..M.FormatAmount(x.amount or 0) end
     if r.trigger=="has_property" then return tostring(x.name or x.key or x.token or "PROPERTY") end
     if r.trigger=="pickup_spawned" then return pickupFilterLabel(x) end
     if r.trigger=="deal_entered" then return string.upper(x.kind or "ANY") end
     if r.trigger=="teleport_to_room_event" or r.trigger=="spawn_enemy_event" then return r.eventConfig and r.eventConfig.label end
+    if r.trigger=="console_command_event" then local c=r.eventConfig or {};return c.any==true and "ANY" or tostring(c.command or "") end
     if r.trigger=="void_absorb" or r.trigger=="abbys_absorb" then local f=r.voidFilter or {};return string.upper(f.category or "ANY")..(f.all and ": ANY ITEM" or ": CUSTOM") end
     return nil
 end
@@ -321,7 +348,12 @@ function M.Label(r)
     if actionValid[r.action] then
         local shown=M.FormatAmount(r.amount or M.DefaultAmount(r.action))
         if r.action=="hp_down" and (r.hpLethal==true or r.hpNonlethal==true) and not shown:find("%.") then shown=shown..".0" end
-        actionName = actionName .. " " .. shown
+        if r.action=="hp_up" and type(r.effectConfig)=="table" and r.effectConfig.heartType then
+            local names={red="RED",soul="SOUL",black="BLACK",eternal="ETERNAL"}
+            actionName = actionName.." "..tostring(names[r.effectConfig.heartType] or string.upper(tostring(r.effectConfig.heartType))).." "..shown
+        else
+            actionName = actionName .. " " .. shown
+        end
     end
     local repeatLabel=""
     if r.mode~="must" then
@@ -384,17 +416,17 @@ function M.Key(r)
     if r.trigger=="pickup_count" and type(r.pickupCount)=="table" then triggerKey=triggerKey.."_"..tostring(r.pickupCount.kind).."_"..tostring(r.pickupCount.amount) end
     if r.trigger=="enemy_killed" then triggerKey=triggerKey.."_"..enemyFilterKey(r.enemyFilter) end
     if (r.trigger=="room_entered_x" or r.trigger=="room_cleared_x" or r.trigger=="floor_cleared_time") and type(r.triggerParam)=="table" then triggerKey=triggerKey.."_"..tostring(r.triggerParam.amount or "") end
-    if type(r.extra)=="table" then triggerKey=triggerKey.."_"..tostring(r.extra.kind or r.extra.stat or r.extra.key or r.extra.token or "").."_"..tostring(r.extra.direction or "").."_"..tostring(r.extra.amount or "") end
-    if type(r.eventConfig)=="table" then triggerKey=triggerKey.."_"..tostring(r.eventConfig.roomType or r.eventConfig.type or "").."_"..tostring(r.eventConfig.variant or "").."_"..tostring(r.eventConfig.subtype or "") end
+    if type(r.extra)=="table" then triggerKey=triggerKey.."_"..tostring(r.extra.heartType or r.extra.kind or r.extra.stat or r.extra.key or r.extra.token or "").."_"..tostring(r.extra.direction or "").."_"..tostring(r.extra.amount or "") end
+    if type(r.eventConfig)=="table" then triggerKey=triggerKey.."_"..tostring(r.eventConfig.roomType or r.eventConfig.type or r.eventConfig.command or "").."_"..tostring(r.eventConfig.variant or "").."_"..tostring(r.eventConfig.subtype or "").."_"..tostring(r.eventConfig.any==true) end
     if type(r.voidFilter)=="table" then
         triggerKey=triggerKey.."_"..tostring(r.voidFilter.category).."_"..tostring(r.voidFilter.all)
         local choices={};for token,on in pairs(r.voidFilter.choices or {}) do choices[#choices+1]=tostring(token).."="..tostring(on==true) end;table.sort(choices);triggerKey=triggerKey.."_"..table.concat(choices,"-")
     end
-    if r.logic and r.secondary then local s=r.secondary;triggerKey=triggerKey.."_"..r.logic.."_"..tostring(s.trigger).."_"..tostring(s.keyBinding and s.keyBinding.code or "").."_"..tostring(s.triggerParam and s.triggerParam.amount or "").."_"..tostring(s.itemUse and s.itemUse.token or "").."_"..tostring(s.pickupFilter and s.pickupFilter.kind or "").."_"..enemyFilterKey(s.enemyFilter).."_"..tostring(s.extra and (s.extra.token or s.extra.key or s.extra.kind or s.extra.amount) or "").."_"..tostring(s.roomFilter and roomFilterLabel(s.roomFilter) or "").."_"..tostring(s.bossFilter and bossFilterLabel(s.bossFilter) or "").."_"..tostring(s.voidFilter and extraLabel(s) or "") end
+    if r.logic and r.secondary then local s=r.secondary;triggerKey=triggerKey.."_"..r.logic.."_"..tostring(s.trigger).."_"..tostring(s.keyBinding and s.keyBinding.code or "").."_"..tostring(s.triggerParam and s.triggerParam.amount or "").."_"..tostring(s.itemUse and s.itemUse.token or "").."_"..tostring(s.pickupFilter and s.pickupFilter.kind or "").."_"..enemyFilterKey(s.enemyFilter).."_"..tostring(s.extra and (s.extra.token or s.extra.key or s.extra.kind or s.extra.amount) or "").."_"..tostring(s.eventConfig and (s.eventConfig.command or s.eventConfig.roomType or s.eventConfig.type or s.eventConfig.any) or "").."_"..tostring(s.roomFilter and roomFilterLabel(s.roomFilter) or "").."_"..tostring(s.bossFilter and bossFilterLabel(s.bossFilter) or "").."_"..tostring(s.voidFilter and extraLabel(s) or "") end
     if r.afterAmount then triggerKey=triggerKey.."_after_"..tostring(r.afterAmount) end
     triggerKey=triggerKey.."_cds_"..tostring(r.cooldownSeconds or 0).."_cdr_"..tostring(r.cooldownRooms or 0).."_chance_"..tostring(r.chance or 100).."_delay_"..tostring(r.delaySeconds or 0)
     return "condition_"..r.mode.."_"..triggerKey.."_"..r.action..(r.action=="hp_down" and ((r.hpLethal or r.hpNonlethal) and "_lethal" or "_nonlethal") or "")..
-        ((isRewardAction(r.action) or r.action=="remove_item" or r.action=="spawn_trinket" or r.action=="use_active_effect") and ("_"..M.Rewards.Key(r.gift)) or "")..(r.effectConfig and ("_"..tostring(r.effectConfig.kind or r.effectConfig.status or r.effectConfig.roomType or r.effectConfig.type or r.effectConfig.playerType or r.effectConfig.id or r.effectConfig.stage or r.effectConfig.text or "").."_"..tostring(r.effectConfig.amount or r.effectConfig.stageType or "")) or "")
+        ((isRewardAction(r.action) or r.action=="remove_item" or r.action=="spawn_trinket" or r.action=="use_active_effect") and ("_"..M.Rewards.Key(r.gift)) or "")..(r.effectConfig and ("_"..tostring(r.effectConfig.kind or r.effectConfig.status or r.effectConfig.roomType or r.effectConfig.type or r.effectConfig.playerType or r.effectConfig.id or r.effectConfig.stage or r.effectConfig.text or r.effectConfig.command or "").."_"..tostring(r.effectConfig.amount or r.effectConfig.stageType or "")) or "")
 end
 local function stats(p)
     return {hp=p:GetHearts()+p:GetSoulHearts()+p:GetBoneHearts()*2,
@@ -436,6 +468,7 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
     local seenLevel, lastChapter = false, nil
     local runStartPending=false
     local evaluationSerial=0
+    local suppressConsoleEvent=false
     -- Do not read/set the run seed while the mod file is loading: outside a
     -- run GetStartSeed can be 0, and RNG:SetSeed rejects a zero seed.
     local chanceRoller=RNG()
@@ -514,7 +547,7 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
         return false
     end
     local function singleRuleTriggered(rule, ev, grabbed)
-        if ({health_threshold=true,stat_threshold=true,has_property=true,active_fully_charged=true})[rule.trigger] then
+        if ({broken_heart_num=true,health_threshold=true,stat_threshold=true,has_property=true,active_fully_charged=true})[rule.trigger] then
             local list=ev[rule.trigger]; return type(list)=="table" and list[M.Key(rule)]==true
         end
         if rule.trigger == "grab_item" then return grabMatches(rule.grab, grabbed) end
@@ -557,6 +590,12 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
         end
         if rule.trigger=="deal_entered" then return type(ev.deal_entered)=="table" and (rule.extra.kind=="any" or ev.deal_entered[rule.extra.kind]==true) end
         if rule.trigger=="teleport_to_room_event" then return type(ev.teleport_to_room_event)=="table" and tonumber(ev.teleport_to_room_event.roomType)==tonumber(rule.eventConfig.roomType) end
+        if rule.trigger=="console_command_event" then
+            local commands=ev.console_command_event;local wanted=rule.eventConfig
+            if type(commands)~="table" or type(wanted)~="table" then return false end
+            if wanted.any==true then return next(commands)~=nil end
+            return commands[normalizeCommand(wanted.command)]==true
+        end
         if rule.trigger=="spawn_enemy_event" then
             for _,e in ipairs(ev.spawn_enemy_event or {}) do if tonumber(e.type)==tonumber(rule.eventConfig.type) and tonumber(e.variant or 0)==tonumber(rule.eventConfig.variant or 0) and tonumber(e.subtype or 0)==tonumber(rule.eventConfig.subtype or 0) then return true end end;return false
         end
@@ -669,7 +708,7 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
         keyHeld = {}
         deathList = {roomKey=nil, saw=false, failed=false, missing=0, cleared=false}
         seenLevel, lastChapter = false, nil
-        runStartPending=false
+        runStartPending=false;suppressConsoleEvent=false
         blockedMessageUntil = 0
     end
     function guard.Snapshot()
@@ -699,7 +738,7 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
         local stage = level and tonumber(level:GetStage()) or nil
         seenLevel = stage ~= nil
         lastChapter = stage and (stage <= 8 and math.floor((stage+1)/2) or stage-4) or nil
-        runStartPending=false
+        runStartPending=false;suppressConsoleEvent=false
         if game:GetNumPlayers() > 0 then
             local p = Isaac.GetPlayer(0)
             p:AddCacheFlags(CacheFlag.CACHE_ALL)
@@ -715,7 +754,7 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
                 if rule.trigger=="required_items" then
                     local p=game:GetNumPlayers()>0 and Isaac.GetPlayer(0) or nil
                     if not p or not guard.ExtraSatisfied(rule,p) then return false end
-                elseif ({health_threshold=true,stat_threshold=true,has_property=true,active_fully_charged=true})[rule.trigger] then
+                elseif ({broken_heart_num=true,health_threshold=true,stat_threshold=true,has_property=true,active_fully_charged=true})[rule.trigger] then
                     local p=game:GetNumPlayers()>0 and Isaac.GetPlayer(0) or nil
                     if not p or not guard.ExtraSatisfied(rule,p) then return false end
                 elseif rule.trigger=="pickup_count" then
@@ -790,7 +829,26 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
                 if not id or not p:HasCollectible(id,true) then return false end
             end
             return #(x.items or {})>0
-        elseif rule.trigger=="health_threshold" then value=(p:GetHearts()+p:GetSoulHearts()+p:GetBoneHearts()*2)/2
+        elseif rule.trigger=="broken_heart_num" then return p:GetBrokenHearts()==tonumber(x.amount)
+        elseif rule.trigger=="health_threshold" then
+            local heartType=x.heartType
+            if heartType=="red" then
+                value=p:GetHearts()/2
+            elseif heartType=="black" then
+                value=blackHeartCount(p)
+            elseif heartType=="soul" then
+                -- GetSoulHearts includes black hearts, so subtract those to get blue/soul hearts only.
+                value=math.max(0,p:GetSoulHearts()/2-blackHeartCount(p))
+            elseif heartType=="eternal" then
+                local eternal=0
+                pcall(function() eternal=p:GetEternalHearts() end)
+                value=tonumber(eternal) or 0
+            elseif heartType=="bone" then
+                value=p:GetBoneHearts()
+            else
+                -- Backwards compatibility with old HEALTH ABOVE/BELOW rules.
+                value=(p:GetHearts()+p:GetSoulHearts()+p:GetBoneHearts()*2)/2
+            end
         elseif rule.trigger=="stat_threshold" then
             local s=stats(p); value=s[x.stat]; if x.stat=="range" and value then value=value/40 end
         elseif rule.trigger=="has_property" then
@@ -860,6 +918,16 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
             if firstVisit then pendingEvents.uncleared_room_enter = {roomType=roomType} end
         end)
     end
+    if ModCallbacks.MC_EXECUTE_CMD then
+        mod:AddCallback(ModCallbacks.MC_EXECUTE_CMD,function(_,command,parameters)
+            if suppressConsoleEvent or not config() then return end
+            local full=tostring(command or "")
+            local params=tostring(parameters or ""):gsub("^%s+",""):gsub("%s+$","")
+            if params~="" then full=full.." "..params end
+            full=normalizeCommand(full)
+            if full~="" then pendingEvents.console_command_event=pendingEvents.console_command_event or {};pendingEvents.console_command_event[full]=true end
+        end)
+    end
     if ModCallbacks.MC_POST_NEW_LEVEL then
         mod:AddCallback(ModCallbacks.MC_POST_NEW_LEVEL, function()
             state.roomActivations={};state.floorActivations={}
@@ -911,27 +979,62 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
         end)
     end
     if ModCallbacks.MC_ENTITY_TAKE_DMG then
+        local function isVoluntaryHealthCost(flags)
+            flags = math.floor(tonumber(flags) or 0)
+            -- Health-payment effects use these flags (blood donation/IV Bag,
+            -- Razor-like actives, devil costs and fake/no-penalty self damage).
+            -- They may still trigger TAKING DAMAGE, but must not invalidate the
+            -- NO DAMAGE ROOM/FLOOR conditions.
+            for _, flag in ipairs({
+                DamageFlag.DAMAGE_RED_HEARTS,
+                DamageFlag.DAMAGE_DEVIL,
+                DamageFlag.DAMAGE_IV_BAG,
+                DamageFlag.DAMAGE_CURSED_DOOR,
+                DamageFlag.DAMAGE_FAKE,
+                DamageFlag.DAMAGE_NO_PENALTIES,
+            }) do
+                flag = tonumber(flag) or 0
+                if flag > 0 and (flags & flag) ~= 0 then return true end
+            end
+            return false
+        end
         mod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, function(_, entity, amount, flags, source, countdown)
             local c = config()
             local player = entity and entity:ToPlayer() or nil
             if c and player and primary(player) and not (isInitializing and isInitializing()) then
                 pendingEvents.taking_damage = true
-                roomDamaged = true
-                floorDamaged = true
+                if not isVoluntaryHealthCost(flags) then
+                    roomDamaged = true
+                    floorDamaged = true
+                end
             end
         end)
     end
-    local function effect(p, key, selectedAmount, hpLethal)
+    local function effect(p, key, selectedAmount, hpLethal, effectConfig)
         local stat, direction = key:match("^(.*)_(%a+)$")
         local sign = direction == "up" and 1 or -1
         local amount = tonumber(selectedAmount) or defaultAmounts[stat] or 1
         if stat == "hp" then
             local units = math.max(1, math.floor(amount*2+0.5))
             if sign > 0 then
-                local before = p:GetHearts()
-                p:AddHearts(units)
-                local left = units-(p:GetHearts()-before)
-                if left > 0 and p:CanPickSoulHearts() then p:AddSoulHearts(left) end
+                local heartType=type(effectConfig)=="table" and effectConfig.heartType or nil
+                if heartType=="red" then
+                    -- Red HP UP only fills existing red-heart capacity. It never creates containers.
+                    p:AddHearts(units)
+                elseif heartType=="black" then
+                    p:AddBlackHearts(units)
+                elseif heartType=="eternal" then
+                    local n=math.max(1,math.floor(amount+0.0001))
+                    p:AddEternalHearts(n)
+                elseif heartType=="soul" then
+                    p:AddSoulHearts(units)
+                else
+                    -- Backwards compatibility for old HP UP rules.
+                    local before = p:GetHearts()
+                    p:AddHearts(units)
+                    local left = units-(p:GetHearts()-before)
+                    if left > 0 and p:CanPickSoulHearts() then p:AddSoulHearts(left) end
+                end
             else
                 local total=p:GetHearts()+p:GetSoulHearts()
                 local left = math.min(units,math.max(0,total-(hpLethal and 0 or 1)))
@@ -961,7 +1064,17 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
         elseif action=="spawn_trinket" then state.rewardRoll=(state.rewardRoll or 0)+1;M.Rewards.SpawnTrinket(p,rule.gift,game,state.rewardRoll)
         elseif action=="heal" then p:AddHearts(math.max(1,math.floor((tonumber(c.amount) or 1)*2+0.5)))
         elseif action=="damage" then p:TakeDamage(math.max(0.5,tonumber(c.amount) or 1),DamageFlag.DAMAGE_NO_PENALTIES,EntityRef(p),0)
-        elseif action=="add_heart_container" then local n=math.max(1,math.floor((tonumber(c.amount) or 1)*2+0.5));p:AddMaxHearts(n,true);p:AddHearts(n)
+        elseif action=="add_broken_heart" then p:AddBrokenHearts(math.max(1,math.min(11,math.floor(tonumber(c.amount) or 1))))
+        elseif action=="remove_broken_heart" then p:AddBrokenHearts(-math.min(p:GetBrokenHearts(),math.max(1,math.min(11,math.floor(tonumber(c.amount) or 1)))))
+        elseif action=="add_heart_container" then
+            local count=math.max(1,math.floor(tonumber(c.amount) or 1))
+            if c.containerType=="bone" then
+                p:AddBoneHearts(count)
+                if c.filled==true then p:AddHearts(count*2) end
+            else
+                p:AddMaxHearts(count*2,true)
+                if c.filled==true then p:AddHearts(count*2) end
+            end
         elseif action=="remove_heart_container" then p:AddMaxHearts(-math.min(p:GetMaxHearts(),math.max(1,math.floor((tonumber(c.amount) or 1)*2+0.5))),true)
         elseif action=="charge_item" then
             local slot=ActiveSlot and ActiveSlot.SLOT_PRIMARY or 0;local id=p:GetActiveItem(slot)
@@ -971,6 +1084,9 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
         elseif action=="spawn_pickup" then
             local map={coin=PickupVariant.PICKUP_COIN,bomb=PickupVariant.PICKUP_BOMB,key=PickupVariant.PICKUP_KEY,heart=PickupVariant.PICKUP_HEART,card=PickupVariant.PICKUP_TAROTCARD,pill=PickupVariant.PICKUP_PILL,battery=PickupVariant.PICKUP_LIL_BATTERY};local v=map[c.kind]
             for i=1,math.max(1,math.floor(tonumber(c.amount) or 1)) do game:Spawn(EntityType.ENTITY_PICKUP,v,game:GetRoom():FindFreePickupSpawnPosition(p.Position,40,true,false),RandomVector()*2,p,0,math.max(1,(game:GetRoom():GetSpawnSeed()+i*8191)%2147483647)) end
+        elseif action=="spawn_machine" then
+            state.rewardRoll=(state.rewardRoll or 0)+1
+            game:Spawn(EntityType.ENTITY_SLOT,tonumber(c.variant),game:GetRoom():GetCenterPos(),Vector.Zero,p,0,math.max(1,(game:GetRoom():GetSpawnSeed()+state.rewardRoll*8191)%2147483647))
         elseif action=="teleport_room" then
             local level=game:GetLevel();local wanted=tonumber(c.roomType);local target=nil
             if wanted==tonumber(RoomType.ROOM_DEVIL) or wanted==tonumber(RoomType.ROOM_ANGEL) then
@@ -990,12 +1106,16 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
         elseif action=="use_active_effect" then local id=M.Rewards.Resolve(rule.gift and rule.gift.token);if id then p:UseActiveItem(id,UseFlag.USE_NOANIM|UseFlag.USE_NOANNOUNCER) end
         elseif action=="play_sound" then SFXManager():Play(tonumber(c.id) or 1,1,0,false,1)
         elseif action=="show_message" then pcall(function()game:GetHUD():ShowFortuneText(tostring(c.text))end)
+        elseif action=="console_command" then
+            local command=tostring(c.command or ""):gsub("^%s+",""):gsub("%s+$","")
+            if command~="" then suppressConsoleEvent=true;pcall(function() Isaac.ExecuteCommand(command) end);suppressConsoleEvent=false end
         elseif action=="start_timer" then state.timerStarted=game:GetFrameCount()
         elseif action=="stop_timer" then if state.timerStarted then state.timerElapsed=(tonumber(state.timerElapsed) or 0)+math.max(0,game:GetFrameCount()-state.timerStarted);state.timerStarted=nil end
         elseif action=="end_challenge" or action=="win_challenge" then Isaac.Spawn(EntityType.ENTITY_PICKUP,PickupVariant.PICKUP_TROPHY,0,p.Position,Vector.Zero,p)
         elseif action=="lose_challenge" then p:Kill()
         elseif action=="repeat_floor" then StageTransition.SetSameStage(true);game:StartStageTransition(true,1)
-        elseif action=="go_to_stage" then StageTransition.SetNextStage(math.floor(tonumber(c.stage) or 1),math.floor(tonumber(c.stageType) or 0));game:StartStageTransition(true,1)
+        elseif action=="go_to_stage" then
+            StageTransition.SetNextStage(math.floor(tonumber(c.stage) or 1),math.floor(tonumber(c.stageType) or 0));game:StartStageTransition(true,1)
         end
     end
     local function applyRule(p,rule)
@@ -1004,7 +1124,7 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
             if rule.action=="spawn_item" then M.Rewards.Spawn(p,rule.gift,game,state.rewardRoll,blockedItem) else M.Rewards.Give(p,rule.gift,game,state.rewardRoll,blockedItem) end
         elseif rule.action=="give_trinket" then state.rewardRoll=(state.rewardRoll or 0)+1;M.Rewards.GiveTrinket(p,rule.gift,game,state.rewardRoll)
         elseif specialActions[rule.action] then specialEffect(p,rule)
-        else effect(p,rule.action,rule.amount,rule.hpLethal==true or rule.hpNonlethal==true) end
+        else effect(p,rule.action,rule.amount,rule.hpLethal==true or rule.hpNonlethal==true,rule.effectConfig) end
     end
     local function pickupKind(variant)
         if variant==PickupVariant.PICKUP_COIN then return "coin" elseif variant==PickupVariant.PICKUP_BOMB then return "bomb" elseif variant==PickupVariant.PICKUP_KEY then return "key"
@@ -1217,7 +1337,7 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
         if previousPlayerType~=nil and playerType~=previousPlayerType then pendingEvents.character_changed=true end
         previousPlayerType=playerType
         for _,rule in ipairs(c.conditions) do
-            if rule.enabled~=false and M.Valid(rule) and ({health_threshold=true,stat_threshold=true,has_property=true,active_fully_charged=true})[rule.trigger] then
+            if rule.enabled~=false and M.Valid(rule) and ({broken_heart_num=true,health_threshold=true,stat_threshold=true,has_property=true,active_fully_charged=true})[rule.trigger] then
                 local key=M.Key(rule); local yes=guard.ExtraSatisfied(rule,p)
                 if yes and previousExtra[key]~=true then pendingEvents[rule.trigger]=pendingEvents[rule.trigger] or {}; pendingEvents[rule.trigger][key]=true end
                 previousExtra[key]=yes
@@ -1229,7 +1349,10 @@ function M.Attach(mod, game, getConfig, isInitializing, blockedItem)
                 if picked then pendingEvents.pickup_collected=pendingEvents.pickup_collected or {}; pendingEvents.pickup_collected[tostring(touch.kind)]=true; pendingPickupTouches[hash]=nil end
             end
         end
-        local counts={coins=p:GetNumCoins(),bombs=p:GetNumBombs(),keys=p:GetNumKeys(),red_hearts=p:GetHearts()/2,soul_hearts=p:GetSoulHearts()/2,black_hearts=blackHeartCount(p),bone_hearts=p:GetBoneHearts(),rotten_hearts=p:GetRottenHearts()}
+        local broken=p:GetBrokenHearts()
+        local oldBroken=previousPickupCounts.broken_hearts
+        if oldBroken~=nil and broken~=oldBroken then pendingEvents[broken>oldBroken and "add_broken_heart" or "remove_broken_heart"]=true end
+        local counts={broken_hearts=broken,coins=p:GetNumCoins(),bombs=p:GetNumBombs(),keys=p:GetNumKeys(),red_hearts=p:GetHearts()/2,soul_hearts=p:GetSoulHearts()/2,black_hearts=blackHeartCount(p),bone_hearts=p:GetBoneHearts(),rotten_hearts=p:GetRottenHearts()}
         pendingEvents.pickup_count=pendingEvents.pickup_count or {}
         for _,rule in ipairs(c.conditions) do
             if rule.enabled~=false and M.Valid(rule) and rule.trigger=="pickup_count" then

@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	appTitle = "Challenge Maker Exporter 0.8.122"
+	appTitle = "Challenge Maker Exporter 0.8.136"
 
 	WS_OVERLAPPEDWINDOW = 0x00CF0000
 	WS_VISIBLE          = 0x10000000
@@ -99,48 +99,51 @@ type MSG struct {
 }
 
 type Challenge struct {
-	Description        string               `json:"description"`
-	SeedCode           string               `json:"seedCode"`
-	Conditions         json.RawMessage      `json:"conditions"`
-	ID                 string               `json:"id"`
-	Title              string               `json:"title"`
-	PlayerType         int                  `json:"playerType"`
-	PlayerName         string               `json:"playerName"`
-	PlayerIsModded     bool                 `json:"playerIsModded"`
-	PlayerToken        string               `json:"playerToken"`
-	FinalBossKey       string               `json:"finalBossKey"`
-	FinalBossName      string               `json:"finalBossName"`
-	FinalBossID        int                  `json:"finalBossID"`
-	Ending             int                  `json:"ending"`
-	EndStage           int                  `json:"endStage"`
-	AltPath            *bool                `json:"altPath"`
-	MegaSatan          bool                 `json:"megaSatan"`
-	SecretPath         bool                 `json:"secretPath"`
-	Difficulty         int                  `json:"difficulty"`
-	StartingItems      []int                `json:"startingItems"`
-	StartingItemTokens []string             `json:"startingItemTokens"`
-	RequiredItems      []int                `json:"requiredItems"`
-	RequiredItemTokens []string             `json:"requiredItemTokens"`
-	StartingPickups    []PickupRule         `json:"startingPickups"`
-	SizeSteps          *int                 `json:"sizeSteps"`
-	StartStats         FlexibleFloatMap     `json:"startStats"`
-	StartHealth        FlexibleIntMap       `json:"startHealth"`
-	StartCharges       FlexibleIntMap       `json:"startCharges"`
-	StartCoins         *int                 `json:"startCoins"`
-	StartBombs         *int                 `json:"startBombs"`
-	StartKeys          *int                 `json:"startKeys"`
-	MaxTime            *int                 `json:"maxTime"`
-	MaxLives           *int                 `json:"maxLives"`
-	CurseModes         FlexibleStringMap    `json:"curseModes"`
-	BannedPickups      []PickupRule         `json:"bannedPickups"`
-	BannedItems        []int                `json:"bannedItems"`
-	BannedPools        []BannedPool         `json:"bannedPools"`
-	BannedItemTokens   []string             `json:"bannedItemTokens"`
-	BannedRooms        []int                `json:"bannedRooms"`
-	BannedRoomNames    []string             `json:"bannedRoomNames"`
-	Blindfold          bool                 `json:"blindfold"`
-	NoSoul             bool                 `json:"noSoul"`
-	Transformations    []TransformationRule `json:"transformations"`
+	Description            string               `json:"description"`
+	SeedCode               string               `json:"seedCode"`
+	NeededAchievements     []int                `json:"neededAchievements"`
+	NeededMods             []RequiredMod        `json:"neededMods"`
+	UnlockAchievementToken string               `json:"unlockAchievementToken"`
+	Conditions             json.RawMessage      `json:"conditions"`
+	ID                     string               `json:"id"`
+	Title                  string               `json:"title"`
+	PlayerType             int                  `json:"playerType"`
+	PlayerName             string               `json:"playerName"`
+	PlayerIsModded         bool                 `json:"playerIsModded"`
+	PlayerToken            string               `json:"playerToken"`
+	FinalBossKey           string               `json:"finalBossKey"`
+	FinalBossName          string               `json:"finalBossName"`
+	FinalBossID            int                  `json:"finalBossID"`
+	Ending                 int                  `json:"ending"`
+	EndStage               int                  `json:"endStage"`
+	AltPath                *bool                `json:"altPath"`
+	MegaSatan              bool                 `json:"megaSatan"`
+	SecretPath             bool                 `json:"secretPath"`
+	Difficulty             int                  `json:"difficulty"`
+	StartingItems          []int                `json:"startingItems"`
+	StartingItemTokens     []string             `json:"startingItemTokens"`
+	RequiredItems          []int                `json:"requiredItems"`
+	RequiredItemTokens     []string             `json:"requiredItemTokens"`
+	StartingPickups        []PickupRule         `json:"startingPickups"`
+	SizeSteps              *int                 `json:"sizeSteps"`
+	StartStats             FlexibleFloatMap     `json:"startStats"`
+	StartHealth            FlexibleIntMap       `json:"startHealth"`
+	StartCharges           FlexibleIntMap       `json:"startCharges"`
+	StartCoins             *int                 `json:"startCoins"`
+	StartBombs             *int                 `json:"startBombs"`
+	StartKeys              *int                 `json:"startKeys"`
+	MaxTime                *int                 `json:"maxTime"`
+	MaxLives               *int                 `json:"maxLives"`
+	CurseModes             FlexibleStringMap    `json:"curseModes"`
+	BannedPickups          []PickupRule         `json:"bannedPickups"`
+	BannedItems            []int                `json:"bannedItems"`
+	BannedPools            []BannedPool         `json:"bannedPools"`
+	BannedItemTokens       []string             `json:"bannedItemTokens"`
+	BannedRooms            []int                `json:"bannedRooms"`
+	BannedRoomNames        []string             `json:"bannedRoomNames"`
+	Blindfold              bool                 `json:"blindfold"`
+	NoSoul                 bool                 `json:"noSoul"`
+	Transformations        []TransformationRule `json:"transformations"`
 }
 
 // Isaac's JSON encoder serializes an empty Lua table as [] rather than {}.
@@ -199,6 +202,12 @@ type PickupRule struct {
 	Delivery string `json:"delivery"`
 }
 
+type RequiredMod struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
 // Must match the in-game editor. Progression-critical room types that older
 // Challenge Maker versions exposed are deliberately ignored during export.
 var bannableRoomTypes = map[int]bool{
@@ -221,6 +230,9 @@ func filteredBannedRooms(rooms []int) []int {
 
 //go:embed cm_description.lua
 var descriptionLua string
+
+//go:embed cm_theme.lua
+var themeLua string
 
 //go:embed cm_general.lua
 var generalLua string
@@ -537,9 +549,11 @@ func prepareFolderExport(modsDir, folder string, selected, saved []Challenge) (m
 	main = strings.ReplaceAll(main, `include("cm_seed")`, "include("+luaQuote(moduleDir+"/cm_seed")+")")
 	main = strings.ReplaceAll(main, `include("cm_run_limits")`, "include("+luaQuote(moduleDir+"/cm_run_limits")+")")
 	main = strings.ReplaceAll(main, `include('cm_conditions')`, "include("+luaQuote(moduleDir+"/cm_conditions")+")")
+	description := strings.ReplaceAll(descriptionLua, `include('cm_theme')`, "include("+luaQuote(moduleDir+"/cm_theme")+")")
 	conditions := strings.ReplaceAll(conditionsLua, `include("cm_rewards")`, "include("+luaQuote(moduleDir+"/cm_rewards")+")")
 	files := map[string]string{
-		filepath.Join(outDir, moduleDir, "cm_description.lua"): descriptionLua,
+		filepath.Join(outDir, moduleDir, "cm_description.lua"): description,
+		filepath.Join(outDir, moduleDir, "cm_theme.lua"):       themeLua,
 		filepath.Join(outDir, moduleDir, "cm_general.lua"):     generalLua,
 		filepath.Join(outDir, moduleDir, "cm_seed.lua"):        seedLua,
 		filepath.Join(outDir, moduleDir, "cm_run_limits.lua"):  runLimitsLua,
@@ -632,6 +646,23 @@ func buildChallengesXML(cs []Challenge) string {
 		}
 		if c.Difficulty > 0 {
 			attrs = append(attrs, `difficulty="`+strconv.Itoa(c.Difficulty)+`"`)
+		}
+		if len(c.NeededAchievements) > 0 {
+			achievements := make([]string, 0, len(c.NeededAchievements))
+			seen := map[int]bool{}
+			for _, id := range c.NeededAchievements {
+				if id > 0 && !seen[id] {
+					achievements = append(achievements, strconv.Itoa(id))
+					seen[id] = true
+				}
+			}
+			if len(achievements) > 0 {
+				attrs = append(attrs, `achievements="`+strings.Join(achievements, ",")+`"`)
+				attrs = append(attrs, `lockeddesc="LOCKED: NEEDED ACHIEVEMENTS"`)
+			}
+		}
+		if token := strings.TrimSpace(c.UnlockAchievementToken); token != "" {
+			attrs = append(attrs, `unlockachievement="`+xmlEscape(token)+`"`)
 		}
 		// REPENTOGON challenges.xml accepts modded starting collectibles by XML name.
 		// Challenge Maker stores those names as StartingItemTokens while vanilla
@@ -773,13 +804,25 @@ func buildGeneratedLua(cs []Challenge) string {
 				b.WriteString("        " + entry.name + " = " + strconv.Itoa(*entry.value) + ",\n")
 			}
 		}
-		if c.MaxTime != nil && *c.MaxTime > 0 && *c.MaxTime <= 999999 { b.WriteString("        maxTime = " + strconv.Itoa(*c.MaxTime) + ",\n") }
-		if c.MaxLives != nil && *c.MaxLives > 0 && *c.MaxLives <= 99 { b.WriteString("        maxLives = " + strconv.Itoa(*c.MaxLives) + ",\n") }
+		if c.MaxTime != nil && *c.MaxTime > 0 && *c.MaxTime <= 999999 {
+			b.WriteString("        maxTime = " + strconv.Itoa(*c.MaxTime) + ",\n")
+		}
+		if c.MaxLives != nil && *c.MaxLives > 0 && *c.MaxLives <= 99 {
+			b.WriteString("        maxLives = " + strconv.Itoa(*c.MaxLives) + ",\n")
+		}
 		b.WriteString("        legacyRequiredItemTokens = {")
-		if len(c.RequiredItemTokens)>0 {
-			for _,token := range c.RequiredItemTokens { if strings.TrimSpace(token)!="" { b.WriteString(luaQuote(token)+",") } }
+		if len(c.RequiredItemTokens) > 0 {
+			for _, token := range c.RequiredItemTokens {
+				if strings.TrimSpace(token) != "" {
+					b.WriteString(luaQuote(token) + ",")
+				}
+			}
 		} else {
-			for _,id := range c.RequiredItems { if id>0 { b.WriteString(luaQuote(strconv.Itoa(id)) + ",") } }
+			for _, id := range c.RequiredItems {
+				if id > 0 {
+					b.WriteString(luaQuote(strconv.Itoa(id)) + ",")
+				}
+			}
 		}
 		b.WriteString("},\n")
 		b.WriteString("        startingPickups = {\n")
@@ -822,6 +865,23 @@ func buildGeneratedLua(cs []Challenge) string {
 		}
 		b.WriteString("},\n")
 		b.WriteString("        description = " + luaQuote(c.Description) + ",\n")
+		b.WriteString("        neededMods = {\n")
+		for _, required := range c.NeededMods {
+			id := strings.TrimSpace(required.ID)
+			if id == "" {
+				continue
+			}
+			name := strings.TrimSpace(required.Name)
+			if name == "" {
+				name = "Workshop mod " + id
+			}
+			url := strings.TrimSpace(required.URL)
+			if url == "" {
+				url = "https://steamcommunity.com/sharedfiles/filedetails/?id=" + id
+			}
+			b.WriteString("            {id=" + luaQuote(id) + ", name=" + luaQuote(name) + ", url=" + luaQuote(url) + "},\n")
+		}
+		b.WriteString("        },\n")
 		b.WriteString("    },\n")
 	}
 	b.WriteString("}\n\n")
@@ -836,6 +896,10 @@ func buildGeneratedLua(cs []Challenge) string {
 	b.WriteString("local allowedPills = nil\n")
 	b.WriteString("local startingPickupsApplied = false\n")
 	b.WriteString("local START_STAT_FLAGS = CacheFlag.CACHE_SPEED | CacheFlag.CACHE_FIREDELAY | CacheFlag.CACHE_DAMAGE | CacheFlag.CACHE_RANGE | CacheFlag.CACHE_SHOTSPEED | CacheFlag.CACHE_LUCK\n")
+	b.WriteString("function mod:MissingRequiredMods(challenge) local missing={} for _,required in ipairs((challenge and challenge.neededMods) or {}) do local id=tostring(required.id or ''):match('%d+') local loaded=false if id and XMLData and XMLData.GetModById then local ok,info=pcall(function() return XMLData.GetModById(id) end) loaded=ok and info~=nil end if not loaded then missing[#missing+1]=required end end return missing end\n")
+	b.WriteString("function mod:DisabledRequiredMods(challenge) local disabled={} for _,required in ipairs((challenge and challenge.neededMods) or {}) do local id=tostring(required.id or ''):match('%d+') if id then local ok,info=pcall(function() return XMLData.GetModById(id) end) local readable,enabled=pcall(function() return info and info.enabled end) local value=tostring(enabled):lower() if ok and info~=nil and readable and (enabled==false or enabled==0 or value=='false' or value=='0') then disabled[#disabled+1]=required end end end return disabled end\n")
+	b.WriteString("function mod:JoinModNames(mods) local names={} for _,required in ipairs(mods or {}) do names[#names+1]=tostring(required.name or required.id or 'mod') end if #names==0 then return 'mods' elseif #names==1 then return names[1] end local last=table.remove(names) return table.concat(names,', ')..' and '..last end\n")
+	b.WriteString("function mod:OpenRequiredModsInSteam(mods) local opened=false local links={} for _,required in ipairs(mods or {}) do local id=tostring(required.id or ''):match('%d+') if id then links[#links+1]='https://steamcommunity.com/sharedfiles/filedetails/?id='..id if type(Isaac.OpenURL)=='function' then opened=pcall(function() Isaac.OpenURL('steam://url/CommunityFilePage/'..id) end) or opened end end end if not opened and #links>0 and type(Isaac.SetClipboard)=='function' then local ok,result=pcall(function() return Isaac.SetClipboard(table.concat(links,'\\n')) end) return false,ok and result~=false end return opened,false end\n")
 	b.WriteString("function mod:OnStartingStatCache(player,flag)\n")
 	b.WriteString("    if not activeConfig or not player or game:GetNumPlayers()<1 or GetPtrHash(player)~=GetPtrHash(Isaac.GetPlayer(0)) then return end\n")
 	b.WriteString("    local s=activeConfig.startStats or {}\n")
